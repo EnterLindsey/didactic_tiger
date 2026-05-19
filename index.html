@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans,sans-serif);font-size:14px;color:var(--color-text-primary,#222);background:transparent}
+.nav{display:flex;gap:6px;padding:12px 0 14px;border-bottom:0.5px solid var(--color-border-tertiary,#ddd);flex-wrap:wrap}
+.nav-btn{padding:6px 14px;border:0.5px solid var(--color-border-secondary,#ccc);border-radius:var(--border-radius-md,8px);background:transparent;cursor:pointer;font-size:13px;color:var(--color-text-secondary,#666);transition:all .15s}
+.nav-btn.active{background:var(--color-background-secondary,#f5f5f5);color:var(--color-text-primary,#222);border-color:var(--color-border-primary,#aaa);font-weight:500}
+.nav-btn:hover:not(.active){background:var(--color-background-secondary,#f5f5f5)}
+.view{display:none}.view.active{display:block;padding-top:12px}
+.filters{display:flex;gap:8px;padding:0 0 12px;flex-wrap:wrap;align-items:center}
+.filters label{font-size:12px;color:var(--color-text-secondary,#666)}
+select{padding:5px 10px;border:0.5px solid var(--color-border-secondary,#ccc);border-radius:var(--border-radius-md,8px);background:var(--color-background-primary,#fff);color:var(--color-text-primary,#222);font-size:13px;cursor:pointer}
+.metric-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px}
+.metric{background:var(--color-background-secondary,#f5f5f5);border-radius:var(--border-radius-md,8px);padding:12px}
+.metric .label{font-size:11px;color:var(--color-text-secondary,#888);margin-bottom:4px}
+.metric .val{font-size:22px;font-weight:500}
+.metric .sub{font-size:11px;color:var(--color-text-secondary,#888);margin-top:2px}
+.tbl-wrap{max-height:460px;overflow-y:auto;border:0.5px solid var(--color-border-tertiary,#ddd);border-radius:var(--border-radius-lg,12px)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:8px 10px;background:var(--color-background-secondary,#f5f5f5);font-weight:500;font-size:12px;color:var(--color-text-secondary,#666);border-bottom:0.5px solid var(--color-border-tertiary,#ddd);position:sticky;top:0;z-index:1}
+td{padding:7px 10px;border-bottom:0.5px solid var(--color-border-tertiary,#ddd);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--color-background-secondary,#f7f7f7)}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500;white-space:nowrap}
+.chart-wrap{position:relative;margin-bottom:16px}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--color-text-secondary);margin-bottom:12px}
+.legend-item{display:flex;align-items:center;gap:4px}
+.legend-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.toggle-row{display:flex;gap:6px;margin-bottom:10px;align-items:center;flex-wrap:wrap}
+.toggle-btn{padding:4px 10px;border:0.5px solid var(--color-border-secondary,#ccc);border-radius:var(--border-radius-md,8px);background:transparent;cursor:pointer;font-size:12px;color:var(--color-text-secondary,#666)}
+.toggle-btn.active{background:var(--color-background-secondary);color:var(--color-text-primary);font-weight:500}
+.hint{font-size:12px;color:var(--color-text-secondary);margin-bottom:10px}
+.gantt-wrap{overflow-x:auto}
+.gantt-tbl{border-collapse:collapse;font-size:12px;min-width:860px;width:100%}
+.gantt-tbl th{padding:5px 7px;font-size:11px;font-weight:500;color:var(--color-text-secondary,#666);background:var(--color-background-secondary,#f5f5f5);border:0.5px solid var(--color-border-tertiary,#ddd);white-space:nowrap}
+.gantt-tbl td{padding:4px 6px;border:0.5px solid var(--color-border-tertiary,#ddd);vertical-align:middle}
+</style>
+</head>
+<body>
+<h2 class="sr-only">Book of Business capacity dashboard — view by operating unit, sub product, delivery program, status, and team</h2>
+
+<div class="nav">
+  <button class="nav-btn active" onclick="showView('overview',this)">Overview</button>
+  <button class="nav-btn" onclick="showView('ou',this)">Operating unit</button>
+  <button class="nav-btn" onclick="showView('subprod',this)">Sub product</button>
+  <button class="nav-btn" onclick="showView('program',this)">Delivery program</button>
+  <button class="nav-btn" onclick="showView('status',this)">Status</button>
+  <button class="nav-btn" onclick="showView('team',this)">Team capacity</button>
+  <button class="nav-btn" onclick="showView('list',this)">Item list</button>
+  <button class="nav-btn" onclick="showView('gantt',this)">Gantt</button>
+</div>
+
+<!-- OVERVIEW -->
+<div id="view-overview" class="view active">
+  <div id="ov-metrics" class="metric-row"></div>
+  <div class="toggle-row">
+    <span style="font-size:12px;color:var(--color-text-secondary)">Color by</span>
+    <button class="toggle-btn active" id="ov-prog-btn" onclick="setOvColor('program')">Delivery program</button>
+    <button class="toggle-btn" id="ov-ou-btn" onclick="setOvColor('ou')">Operating unit</button>
+    <button class="toggle-btn" id="ov-status-btn" onclick="setOvColor('status')">Status</button>
+  </div>
+  <p class="hint">All items ranked by team span (# teams assigned). Bar length = team span. Color = selected dimension.</p>
+  <div id="ov-legend" class="legend"></div>
+  <div class="chart-wrap" id="ov-chart-wrap" style="height:500px"><canvas id="ov-chart" role="img" aria-label="Horizontal bar chart of all items ranked by team span"></canvas></div>
+</div>
+
+<!-- OPERATING UNIT -->
+<div id="view-ou" class="view">
+  <div class="toggle-row">
+    <span style="font-size:12px;color:var(--color-text-secondary)">Measure</span>
+    <button class="toggle-btn active" id="ou-items-btn" onclick="setOuMode('items')">Item count</button>
+    <button class="toggle-btn" id="ou-assign-btn" onclick="setOuMode('assignments')">Team assignments (weighted)</button>
+  </div>
+  <div id="ou-legend" class="legend"></div>
+  <div class="chart-wrap" style="height:300px"><canvas id="ou-chart" role="img" aria-label="Stacked bar chart by operating unit"></canvas></div>
+  <div class="tbl-wrap"><table id="ou-table"><thead><tr><th>Operating unit</th><th>Items</th><th>Team assignments</th><th>Avg team span</th><th>Breakdown by delivery program</th></tr></thead><tbody id="ou-body"></tbody></table></div>
+</div>
+
+<!-- SUB PRODUCT -->
+<div id="view-subprod" class="view">
+  <div class="toggle-row">
+    <span style="font-size:12px;color:var(--color-text-secondary)">Measure</span>
+    <button class="toggle-btn active" id="sp-items-btn" onclick="setSpMode('items')">Item count</button>
+    <button class="toggle-btn" id="sp-assign-btn" onclick="setSpMode('assignments')">Team assignments (weighted)</button>
+  </div>
+  <div id="sp-legend" class="legend"></div>
+  <div class="chart-wrap" style="height:340px"><canvas id="sp-chart" role="img" aria-label="Bar chart by sub product"></canvas></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Sub product</th><th>Items</th><th>Team assignments</th><th>Avg team span</th></tr></thead><tbody id="sp-body"></tbody></table></div>
+</div>
+
+<!-- DELIVERY PROGRAM -->
+<div id="view-program" class="view">
+  <div class="toggle-row">
+    <span style="font-size:12px;color:var(--color-text-secondary)">Measure</span>
+    <button class="toggle-btn active" id="dp-items-btn" onclick="setDpMode('items')">Item count</button>
+    <button class="toggle-btn" id="dp-assign-btn" onclick="setDpMode('assignments')">Team assignments (weighted)</button>
+  </div>
+  <div id="dp-legend" class="legend"></div>
+  <div class="chart-wrap" style="height:300px"><canvas id="dp-chart" role="img" aria-label="Stacked bar chart by delivery program broken down by operating unit"></canvas></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Delivery program</th><th>Items</th><th>Team assignments</th><th>Avg team span</th><th>Multi-team items</th></tr></thead><tbody id="dp-body"></tbody></table></div>
+</div>
+
+<!-- STATUS -->
+<div id="view-status" class="view">
+  <div class="toggle-row">
+    <span style="font-size:12px;color:var(--color-text-secondary)">Measure</span>
+    <button class="toggle-btn active" id="st-items-btn" onclick="setStMode('items')">Item count</button>
+    <button class="toggle-btn" id="st-assign-btn" onclick="setStMode('assignments')">Team assignments (weighted)</button>
+  </div>
+  <p class="hint">Active = currently in flight. Next = committed pipeline. Understand where capacity is already locked.</p>
+  <div class="chart-wrap" style="height:280px"><canvas id="st-chart" role="img" aria-label="Grouped bar chart by status and delivery program"></canvas></div>
+  <div class="tbl-wrap" style="margin-top:12px"><table><thead><tr><th>Status</th><th>Delivery program</th><th>Items</th><th>Team assignments</th><th>Avg span</th></tr></thead><tbody id="st-body"></tbody></table></div>
+</div>
+
+<!-- TEAM CAPACITY -->
+<div id="view-team" class="view">
+  <p class="hint">Weighted load = sum of team-spans across all items a team is on. A team on a 6-team item carries more cross-org burden than one on a 1-team item.</p>
+  <div id="team-legend" class="legend"></div>
+  <div class="chart-wrap" id="team-chart-wrap" style="height:520px"><canvas id="team-chart" role="img" aria-label="Horizontal bar chart of team weighted capacity load"></canvas></div>
+</div>
+
+<!-- ITEM LIST -->
+<div id="view-list" class="view">
+  <div class="filters">
+    <label>Operating unit</label><select id="f-ou" onchange="renderList()"><option value="">All</option></select>
+    <label>Program</label><select id="f-prog" onchange="renderList()"><option value="">All</option></select>
+    <label>Status</label><select id="f-status" onchange="renderList()"><option value="">All</option></select>
+    <label>Team</label><select id="f-team" onchange="renderList()"><option value="">All</option></select>
+  </div>
+  <div id="list-metrics" class="metric-row"></div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Key</th><th>Summary</th><th>Operating unit</th><th>Sub product</th><th>Program</th><th>Status</th><th style="text-align:center">Teams</th><th>Assigned teams</th></tr></thead>
+    <tbody id="list-body"></tbody>
+  </table></div>
+</div>
+
+<!-- GANTT -->
+<div id="view-gantt" class="view">
+  <div class="filters">
+    <label>Program</label><select id="fg-prog" onchange="renderGantt()"><option value="">All</option></select>
+    <label>Status</label><select id="fg-status" onchange="renderGantt()"><option value="">All</option></select>
+    <label>Team</label><select id="fg-team" onchange="renderGantt()"><option value="">All</option></select>
+  </div>
+  <p class="hint">Bar height scales with team span — taller bars = more teams involved. Dates are placeholders until real delivery dates are provided.</p>
+  <div class="gantt-wrap"><table class="gantt-tbl" id="gantt-table"></table></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const RAW=[
+["ZPP-1","Summary 1","Payer","Other","Tech Initiative","Active","ZAPP OS","","","","","","",""],
+["ZPP-2","Summary 2","Provider","Other","Tech Initiative","Active","Payee Experience: Orion","","","","","","",""],
+["ZPP-3","Summary 3","Payer","Other","Tech Initiative","Active","Payer RR: ZINJAS","","","","","","",""],
+["ZPP-4","Summary 4","Other","Other","Tech Initiative","Active","ZAPP OS","","","","","","",""],
+["ZPP-5","Summary 5","Provider","Payee Experience","Tech Initiative","Active","Payee Experience: Orion","","","","","","",""],
+["ZPP-6","Summary 6","Payer","Financial Ops","Tech Initiative","Active","CBS: Financial Ops","CBS: Payments","","","","","",""],
+["ZPP-7","Summary 7","Payer","Communications","Tech Initiative","Active","CBS: Print/Batch/Ship","","","","","","",""],
+["ZPP-8","Summary 8","Provider","Service Ecosystem","Run the Business","Active","Service Ecosystem: Singularity","ZEDI","","","","","",""],
+["ZPP-9","Summary 9","Other","Other","Tech Initiative","Active","ZAPP OS","","","","","","",""],
+["ZPP-10","Summary 10","Provider","Service Ecosystem","Tech Initiative","Active","Service Ecosystem: Sniper (PINS)","","","","","","",""],
+["ZPP-11","Summary 11","Payer","Rapid Response (Payer)","Client Request","Active","Payer RR: ZINJAS","","","","","","",""],
+["ZPP-12","Summary 12","Other","Data Experience","Tech Initiative","Active","CBS: Platform AI Lab","","","","","","",""],
+["ZPP-13","Summary 13","Other","Other","Tech Initiative","Active","ZAPP OS","","","","","","",""],
+["ZPP-14","Summary 14","Payer","Payments","Client Request","Active","CBS: Payments","","","","","","",""],
+["ZPP-15","Summary 15","Provider","Service Ecosystem","Strategic Roadmap","Active","Service Ecosystem: Sniper (PINS)","","","","","","",""],
+["ZPP-16","Summary 16","Provider","Service Ecosystem","Run the Business","Active","Service Ecosystem: Avengers","","","","","","",""],
+["ZPP-17","Summary 17","Payer","Financial Ops","Client Request","Active","CBS: Financial Ops","","","","","","",""],
+["ZPP-18","Summary 18","Payer","Communications","Tech Initiative","Active","CBS: Payer Integration","","","","","","",""],
+["ZPP-19","Summary 19","Other","Other","Tech Initiative","Active","CBS: Payer Integration","","","","","","",""],
+["ZPP-20","Summary 20","Payer","Rapid Response (Payer)","Client Request","Active","Payer RR: ZINS","","","","","","",""],
+["ZPP-21","Summary 21","Payer","Payments","Tech Initiative","Active","CBS: Payments","","","","","","",""],
+["ZPP-22","Summary 22","Other","Other","Tech Initiative","Active","CBS: Payee Integration","CBS: Payspan Core","Platform Reliability: Release Engineering","Platform Reliability: System Test Engineering","ZAPP OS","ZEDI","",""],
+["ZPP-23","Summary 23","Payer","Rapid Response (Payer)","Client Request","Active","Payer RR: ZINS","","","","","","",""],
+["ZPP-24","Summary 24","Provider","Service Ecosystem","Strategic Roadmap","Active","Service Ecosystem: Sniper (PINS)","","","","","","",""],
+["ZPP-25","Summary 25","Provider","Payee Experience","Client Request","Active","Payer RR: ZINJAS","","","","","","",""],
+["ZPP-26","Summary 26","Payer","Communications","Tech Initiative","Active","CBS: Content Delivery","","","","","","",""],
+["ZPP-27","Summary 27","Payer","Financial Ops - Reporting","Tech Initiative","Active","Data Analytics: Heritage DW Support","","","","","","",""],
+["ZPP-28","Summary 28","Payer","Communications","Client Request","Active","CBS: Content Delivery","","","","","","",""],
+["ZPP-29","Summary 29","Other","Data Experience","Tech Initiative","Active","CBS: Platform AI Lab","","","","","","",""],
+["ZPP-30","Summary 30","Payer","Communications","Client Request","Active","CBS: Payer Integration","","","","","","",""],
+["ZPP-31","Summary 31","Payer","Communications","Tech Initiative","Active","CBS: Content Delivery","","","","","","",""],
+["ZPP-32","Summary 32","Other","Other","Tech Initiative","Active","","","","","","","",""],
+["ZPP-33","Summary 33","Payer","Financial Ops","Run the Business","Active","CBS: Financial Ops","","","","","","",""],
+["ZPP-34","Summary 34","Payer","Payments","Run the Business","Active","CBS: Payments","","","","","","",""],
+["ZPP-35","Summary 35","Payer","Rapid Response (Payer)","Client Request","Active","Payer RR: ZINJAS","","","","","","",""],
+["ZPP-36","Summary 36","Payer","Rapid Response (Payer)","Client Request","Active","Payer RR: ZINJAS","","","","","","",""],
+["ZPP-37","Summary 37","Payer","Communications","Client Request","Active","Payer RR: ZINS","","","","","","",""],
+["ZPP-38","Summary 38","Payer","Payments","Tech Initiative","Active","CBS: Content Delivery","","","","","","",""],
+["ZPP-39","Summary 39","Payer","Member Experience","Client Request","Active","Member Experience: Nebula","","","","","","",""],
+["ZPP-40","Summary 40","Payer","Payments","Run the Business","Active","CBS: Payments","","","","","","",""],
+["ZPP-41","Summary 41","Provider","Service Ecosystem","Tech Initiative","Active","Service Ecosystem: Sniper (PINS)","","","","","","",""],
+["ZPP-42","Summary 42","Payer","Communications","Client Request","Active","CBS: Print/Batch/Ship","","","","","","",""],
+["ZPP-43","Summary 43","Other","Other","Tech Initiative","Active","","","","","","","",""],
+["ZPP-44","Summary 44","Other","Other","Tech Initiative","Active","ZEDI","","","","","","",""],
+["ZPP-45","Summary 45","Payer","Other","Run the Business","Active","Service Ecosystem: Singularity","","","","","","",""],
+["ZPP-46","Summary 46","Data Services","Reporting","Client Request","Active","ZAPP OS","ZEDI","","","","","",""],
+["ZPP-47","Summary 47","Payer","Rapid Response (Payer)","Client Request","Active","Payer RR: ZINS","","","","","","",""],
+["ZPP-48","Summary 48","Payer","Communications","Client Request","Active","CBS: Payer Integration","","","","","","",""],
+["ZPP-49","Summary 49","Other","Other","Tech Initiative","Active","CBS: Payspan Core","ZAPP Cloud: Cloud Modernization - CEI","","","","","",""],
+["ZPP-50","Summary 50","Data Services","Other","Client Request","Active","Data Analytics: Heritage ZPASS Reporting","Data Services: Data Platform","","","","","",""],
+["ZPP-51","Summary 51","Other","Other","Tech Initiative","Active","","","","","","","",""],
+["ZPP-52","Summary 52","Payer","Payments","Strategic Roadmap","Active","Payer Experience: Nova","Payer Experience: York Lab","","","","","",""],
+["ZPP-53","Summary 53","Provider","Rapid Response (Provider)","Tech Initiative","Active","Provider RR: Vindicators","","","","","","",""],
+["ZPP-54","Summary 54","Data Services","Other","Run the Business","Active","Data Analytics: Heritage ZPASS Reporting","Data Services: Data Platform","Data Services: Data Platform - Citius","","","","",""],
+["ZPP-55","Summary 55","Payer","Payments","Run the Business","Active","CBS: Financial Ops","CBS: Payments","","","","","",""],
+["ZPP-56","Summary 56","Other","Other","Run the Business","Active","ZEDI","","","","","","",""],
+["ZPP-57","Summary 57","Provider","Payee Experience","Tech Initiative","Active","Payee Experience: Orion","Service Ecosystem: Avengers","Service Ecosystem: Sniper (PINS)","","","","",""],
+["ZPP-58","Summary 58","Payer","Communications","Tech Initiative","Active","CBS: Content Delivery","","","","","","",""],
+["ZPP-59","Summary 59","Payer","Rapid Response (Payer)","Client Request","Active","Payer RR: ZINJAS","","","","","","",""],
+["ZPP-60","Summary 60","Payer","Service Ecosystem","Client Request","Active","Service Ecosystem: Singularity","","","","","","",""],
+["ZPP-61","Summary 61","Provider","Rapid Response (Provider)","Run the Business","Active","Service Ecosystem: Singularity","","","","","","",""],
+["ZPP-62","Summary 62","Payer","Member Experience","Client Request","Active","Member Experience: Nebula","","","","","","",""],
+["ZPP-63","Summary 63","Payer","Member Experience","Strategic Roadmap","Next","Member Experience: Nebula","","","","","","",""],
+["ZPP-64","Summary 64","Other","Other","Strategic Roadmap","Next","ZEDI","","","","","","",""],
+["ZPP-65","Summary 65","Payer","Member Experience","Client Request","Next","Member Experience: Nebula","","","","","","",""],
+["ZPP-66","Summary 66","Other","Other","Tech Initiative","Next","ZAPP OS","","","","","","",""],
+["ZPP-67","Summary 67","Payer","Rapid Response (Payer)","Client Request","Next","Payer RR: ZINS","","","","","","",""],
+["ZPP-68","Summary 68","Payer","Communications","Client Request","Next","CBS: Payer Integration","","","","","","",""],
+["ZPP-69","Summary 69","Provider","Payee Experience","Run the Business","Next","Payee Experience: Mavericks","","","","","","",""],
+["ZPP-70","Summary 70","Provider","Payee Experience","Strategic Roadmap","Next","Payee Experience: Orion","","","","","","",""],
+["ZPP-71","Summary 71","Payer","Payments","Client Request","Next","Payer RR: ZINJAS","","","","","","",""],
+["ZPP-72","Summary 72","Payer","Payments","Strategic Roadmap","Next","CBS: Financial Ops","Data Services: Data Platform","Payer Experience: Nova","","","","",""],
+["ZPP-73","Summary 73","Payer","Payments","Run the Business","Next","Service Ecosystem: Singularity","","","","","","",""],
+["ZPP-74","Summary 74","Payer","Communications","Run the Business","Next","CBS: Print/Batch/Ship","","","","","","",""],
+["ZPP-75","Summary 75","Payer","Communications","Tech Initiative","Next","CBS: Content Delivery","","","","","","",""],
+["ZPP-76","Summary 76","Other","Other","Tech Initiative","Next","Platform Reliability: Release Engineering","ZEDI","","","","","",""],
+["ZPP-77","Summary 77","Data Services","Other","Run the Business","Next","Data Analytics: Heritage ZPASS Reporting","Data Services: Data Platform","","","","","",""],
+["ZPP-78","Summary 78","Other","Other","Tech Initiative","Next","CBS: Platform AI Lab","Platform Reliability: System Test Engineering","","","","","",""],
+["ZPP-79","Summary 79","Other","Other","Strategic Roadmap","Next","","","","","","","",""],
+["ZPP-80","Summary 80","Payer","Communications","Tech Initiative","Next","CBS: Payer Integration","","","","","","",""],
+["ZPP-81","Summary 81","Data Services","Other","Tech Initiative","Next","CBS: Platform AI Lab","Data Services: Data Platform","","","","","",""],
+["ZPP-82","Summary 82","Data Services","Other","Run the Business","Next","","","","","","","",""],
+["ZPP-83","Summary 83","Payer","Rapid Response (Payer)","Client Request","Next","Payer RR: ZINJAS","","","","","","",""],
+["ZPP-84","Summary 84","Other","Other","Tech Initiative","Next","CBS: Payspan Core","","","","","","",""],
+["ZPP-85","Summary 85","Data Services","Other","Tech Initiative","Next","Data Services: Data Platform","Data Services: Data Platform - Citius","","","","","",""],
+["ZPP-86","Summary 86","Payer","Other","Tech Initiative","Next","Data Analytics: Heritage DW Support","Data Analytics: Heritage ZPASS Reporting","Data Services: Data Platform","","","","",""],
+["ZPP-87","Summary 87","Data Services","Other","Tech Initiative","Next","CBS: Platform AI Lab","Data Services: Data Platform","ZEDI","","","","",""],
+["ZPP-88","Summary 88","Payer","Payments","Run the Business","Next","CBS: Financial Ops","CBS: Payments","","","","","",""],
+["ZPP-89","Summary 89","Payer","Financial Ops","Run the Business","Next","CBS: Financial Ops","","","","","","",""],
+["ZPP-90","Summary 90","Payer","Communications","Tech Initiative","Next","CBS: Content Delivery","CBS: Financial Ops","CBS: Payee Integration","CBS: Payer Integration","CBS: Payments","CBS: Platform AI Lab","CBS: Print/Batch/Ship","ZAPP OS"],
+["ZPP-91","Summary 91","Other","Other","Tech Initiative","Next","Platform Reliability: Release Engineering","","","","","","",""],
+["ZPP-92","Summary 92","Other","Other","Tech Initiative","Next","Platform Reliability: System Test Engineering","","","","","","",""],
+["ZPP-93","Summary 93","Data Services","Other","Client Request","Next","Data Analytics: Heritage ZPASS Reporting","","","","","","",""],
+["ZPP-94","Summary 94","Data Services","Reporting","Client Request","Next","Data Analytics: Heritage ZPASS Reporting","Data Services: Data Platform","","","","","",""],
+["ZPP-95","Summary 95","Other","Other","Tech Initiative","Next","ZAPP OS","","","","","","",""],
+["ZPP-96","Summary 96","Payer","Payments","Run the Business","Next","CBS: Payments","","","","","","",""],
+["ZPP-97","Summary 97","Payer","Payments","Client Request","Next","CBS: Payer Integration","","","","","","",""],
+["ZPP-98","Summary 98","Payer","Financial Ops","Run the Business","Next","CBS: Financial Ops","","","","","","",""],
+["ZPP-99","Summary 99","Data Services","Other","Tech Initiative","Next","Data Services: Data Platform - Citius","","","","","","",""],
+["ZPP-100","Summary 100","Provider","Payee Experience","Run the Business","Next","CBS: Payee Integration","","","","","","",""],
+["ZPP-101","Summary 101","Provider","Service Ecosystem","Run the Business","Next","Service Ecosystem: Sniper (PINS)","","","","","","",""],
+["ZPP-102","Summary 102","Data Services","Other","Client Request","Next","Data Analytics: Heritage ZPASS Reporting","","","","","","",""],
+["ZPP-103","Summary 103","Data Services","Data Experience","Client Request","Next","Data Services: Data Platform - Citius","","","","","","",""],
+["ZPP-104","Summary 104","Data Services","Other","Tech Initiative","Next","Data Services: Data Platform","","","","","","",""],
+["ZPP-105","Summary 105","Other","Other","Tech Initiative","Next","Platform Reliability: System Test Engineering","","","","","","",""],
+["ZPP-106","Summary 106","Payer","Communications","Tech Initiative","Next","CBS: Payer Integration","","","","","","",""],
+["ZPP-107","Summary 107","Payer","Data Experience","Run the Business","Next","Data Analytics: Heritage DW Support","","","","","","",""],
+["ZPP-108","Summary 108","Payer","Data Experience","Run the Business","Next","CBS: Financial Ops","Data Analytics: Heritage ZPASS Reporting","Data Services: Data Platform","","","","",""],
+["ZPP-109","Summary 109","Data Services","Other","Client Request","Next","Data Analytics: Heritage ZPASS Reporting","","","","","","",""],
+["ZPP-110","Summary 110","Data Services","Other","Run the Business","Next","Data Analytics: Heritage ZPASS Reporting","Data Services: Data Platform","Data Services: Data Platform - Citius","","","","",""],
+["ZPP-111","Summary 111","Payer","Financial Ops","Run the Business","Next","CBS: Financial Ops","","","","","","",""],
+["ZPP-112","Summary 112","Payer","Member Experience","Client Request","Next","Member Experience: Nebula","","","","","","",""],
+["ZPP-113","Summary 113","Payer","Communications","Tech Initiative","Next","CBS: Content Delivery","CBS: Payer Integration","","","","","",""],
+["ZPP-114","Summary 114","Payer","Payments","Run the Business","Next","CBS: Payments","","","","","","",""],
+["ZPP-115","Summary 115","Payer","Financial Ops","Client Request","Next","CBS: Financial Ops","","","","","","",""],
+["ZPP-116","Summary 116","Other","Other","Tech Initiative","Next","Platform Reliability: System Test Engineering","","","","","","",""],
+["ZPP-117","Summary 117","Payer","Service Ecosystem","Run the Business","Next","Service Ecosystem: Singularity","","","","","","",""],
+["ZPP-118","Summary 118","Payer","Communications","Run the Business","Next","CBS: Print/Batch/Ship","","","","","","",""],
+["ZPP-119","Summary 119","Provider","Payee Experience","Run the Business","Next","CBS: Payee Integration","","","","","","",""],
+["ZPP-120","Summary 120","Other","Other","Tech Initiative","Next","CBS: Payspan Core","ZAPP Cloud: Cloud Modernization - CEI","","","","","",""],
+["ZPP-121","Summary 121","Other","Other","Tech Initiative","Next","Platform Reliability: System Test Engineering","","","","","","",""],
+["ZPP-122","Summary 122","Other","Other","Tech Initiative","Next","Platform Reliability: Release Engineering","Platform Reliability: System Test Engineering","","","","","",""],
+["ZPP-123","Summary 123","Payer","Data Experience","Run the Business","Next","CBS: Platform AI Lab","","","","","","",""],
+["ZPP-124","Summary 124","Other","Other","Tech Initiative","Next","CBS: Payspan Core","ZAPP Cloud: Cloud Modernization - CEI","","","","","",""],
+["ZPP-125","Summary 125","Other","Other","Tech Initiative","Next","ZAPP OS","","","","","","",""],
+["ZPP-126","Summary 126","Provider","Service Ecosystem","Tech Initiative","Next","Service Ecosystem: Singularity","","","","","","",""],
+["ZPP-127","Summary 127","Other","Other","Tech Initiative","Next","CBS: Payspan Core","","","","","","",""],
+["ZPP-128","Summary 128","Payer","Payments","Run the Business","Next","CBS: Payments","","","","","","",""],
+["ZPP-129","Summary 129","Payer","Rapid Response (Payer)","Client Request","Next","Payer RR: ZINJAS","","","","","","",""],
+["ZPP-130","Summary 130","Payer","Communications","Tech Initiative","Next","CBS: Payer Integration","","","","","","",""],
+["ZPP-131","Summary 131","Payer","Communications","Run the Business","Next","CBS: Content Delivery","","","","","","",""],
+["ZPP-132","Summary 132","Payer","Communications","Strategic Roadmap","Next","CBS: Print/Batch/Ship","","","","","","",""],
+["ZPP-133","Summary 133","Other","Other","Strategic Roadmap","Next","Data Analytics: Analytics Platform - PH Data","Data Analytics: Heritage ZPASS Reporting","Data Services: Data Platform - Citius","","","","",""],
+["ZPP-134","Summary 134","Provider","Service Ecosystem","Strategic Roadmap","Next","Security & PINS: Zillionaires (Security)","","","","","","",""],
+["ZPP-135","Summary 135","Payer","Communications","Run the Business","Next","CBS: Print/Batch/Ship","","","","","","",""],
+["ZPP-136","Summary 136","Payer","Rapid Response (Payer)","Client Request","Next","Payer RR: ZINJAS","","","","","","",""],
+["ZPP-137","Summary 137","Payer","Payments","Run the Business","Next","CBS: Financial Ops","Data Analytics: Heritage DW Support","Data Services: Data Platform","","","","",""],
+["ZPP-138","Summary 138","Payer","Communications","Client Request","Next","CBS: Payer Integration","","","","","","",""],
+["ZPP-139","Summary 139","Payer","Rapid Response (Payer)","Client Request","Next","Payer RR: ZINS","","","","","","",""],
+["ZPP-140","Summary 140","Payer","Payments","Run the Business","Next","CBS: Financial Ops","","","","","","",""],
+["ZPP-141","Summary 141","Payer","Financial Ops","Client Request","Next","CBS: Financial Ops","","","","","","",""],
+["ZPP-142","Summary 142","Payer","Communications","Client Request","Next","CBS: Print/Batch/Ship","","","","","","",""],
+["ZPP-143","Summary 143","Provider","Rapid Response (Provider)","Tech Initiative","Next","Provider RR: Vindicators","","","","","","",""],
+["ZPP-144","Summary 144","Payer","Rapid Response (Payer)","Client Request","Next","Payer RR: ZINJAS","","","","","","",""],
+["ZPP-145","Summary 145","Provider","Payee Experience","Client Request","Next","CBS: Payee Integration","","","","","","",""],
+["ZPP-146","Summary 146","Payer","Financial Ops","Strategic Roadmap","Next","","","","","","","",""],
+["ZPP-147","Summary 147","Provider","Payee Experience","Run the Business","Next","Service Ecosystem: Avengers","","","","","","",""],
+["ZPP-148","Summary 148","Payer","Payments","Strategic Roadmap","Next","CBS: Payee Integration","CBS: Payer Integration","CBS: Payments","","","","",""],
+["ZPP-149","Summary 149","Payer","Other","Tech Initiative","Next","CBS: Print/Batch/Ship","","","","","","",""],
+["ZPP-150","Summary 150","Provider","Rapid Response (Provider)","Run the Business","Next","Provider RR: Vindicators","","","","","","",""],
+["ZPP-151","Summary 151","Provider","Service Ecosystem","Run the Business","Next","Service Ecosystem: Avengers","","","","","","",""],
+["ZPP-152","Summary 152","Provider","Rapid Response (Provider)","Run the Business","Next","Provider RR: Vindicators","","","","","","",""],
+["ZPP-153","Summary 153","Other","Other","Tech Initiative","Next","ZAPP OS","","","","","","",""],
+["ZPP-154","Summary 154","Payer","Payments","Client Request","Next","Payer RR: ZINS","","","","","","",""],
+["ZPP-155","Summary 155","Payer","Payments","Client Request","Next","CBS: Financial Ops","CBS: Payer Integration","CBS: Payments","CBS: Print/Batch/Ship","","","",""],
+["ZPP-156","Summary 156","Payer","Communications","Tech Initiative","Next","CBS: Content Delivery","","","","","","",""],
+["ZPP-157","Summary 157","Payer","Financial Ops","Run the Business","Next","CBS: Financial Ops","","","","","","",""],
+["ZPP-158","Summary 158","Other","Other","Tech Initiative","Next","","","","","","","",""],
+["ZPP-159","Summary 159","Payer","Service Ecosystem","Tech Initiative","Next","Payer Experience: Nova","Payer Experience: York Lab","Service Ecosystem: Singularity","","","","",""],
+["ZPP-160","Summary 160","Other","Other","Tech Initiative","Next","ZAPP Cloud: Cloud Modernization - CEI","","","","","","",""],
+["ZPP-161","Summary 161","Data Services","Other","Tech Initiative","Next","Data Services: Data Platform - Citius","","","","","","",""],
+["ZPP-162","Summary 162","Data Services","Data Experience","Tech Initiative","Next","Data Analytics: Analytics Platform - PH Data","","","","","","",""],
+["ZPP-163","Summary 163","Payer","Payments","Strategic Roadmap","Next","CBS: Financial Ops","Data Services: Data Platform","Payer Experience: Nova","","","","",""],
+["ZPP-164","Summary 164","Payer","Payments","Strategic Roadmap","Next","CBS: Financial Ops","CBS: Payments","Data Analytics: Heritage DW Support","","","","",""],
+["ZPP-165","Summary 165","Provider","Payee Experience","Strategic Roadmap","Next","CBS: Financial Ops","CBS: Payer Integration","CBS: Payspan Core","","","","",""],
+["ZPP-166","Summary 166","Payer","Communications","Strategic Roadmap","Next","CBS: Print/Batch/Ship","","","","","","",""]
+];
+
+const data = RAW.map(r=>({
+  key:r[0], summary:r[1], ou:r[2], subprod:r[3], program:r[4], status:r[5],
+  teams:r.slice(6).filter(t=>t.trim()),
+  get span(){return Math.max(this.teams.length,1)}
+}));
+
+const OUS=[...new Set(data.map(d=>d.ou))].sort();
+const SUBPRODS=[...new Set(data.map(d=>d.subprod))].sort();
+const PROGRAMS=[...new Set(data.map(d=>d.program))].sort();
+const STATUSES=[...new Set(data.map(d=>d.status))].sort();
+const ALL_TEAMS=[...new Set(data.flatMap(d=>d.teams))].filter(t=>t).sort();
+
+const PROG_COLORS={"Tech Initiative":"#378ADD","Client Request":"#1D9E75","Run the Business":"#534AB7","Strategic Roadmap":"#D4537E","Product Roadmap":"#888780"};
+const OU_COLORS={"Payer":"#378ADD","Provider":"#1D9E75","Other":"#888780","Data Services":"#BA7517"};
+const STATUS_COLORS={"Active":"#1D9E75","Next":"#378ADD"};
+const TEAM_PALETTE=["#378ADD","#1D9E75","#BA7517","#534AB7","#D4537E","#A32D2D","#185FA5","#3B6D11","#633806","#993556","#888780","#0F6E56"];
+
+function badge(val,colors){const c=colors[val]||'#888';return`<span class="badge" style="background:${c}22;color:${c};border:0.5px solid ${c}44">${val}</span>`}
+function spanBadge(n){const c=n>=6?'#A32D2D':n>=4?'#BA7517':n>=2?'#185FA5':'#3B6D11';return`<span class="badge" style="background:${c}22;color:${c};border:0.5px solid ${c}44">${n}</span>`}
+function avg(arr){return arr.length?+(arr.reduce((a,b)=>a+b,0)/arr.length).toFixed(1):0}
+function makeLegend(elId,colorMap){document.getElementById(elId).innerHTML=Object.entries(colorMap).map(([k,c])=>`<span class="legend-item"><span class="legend-dot" style="background:${c}"></span>${k}</span>`).join('')}
+
+function populate(){
+  OUS.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;document.getElementById('f-ou').appendChild(o)});
+  PROGRAMS.forEach(v=>{['f-prog','fg-prog'].forEach(id=>{const o=document.createElement('option');o.value=v;o.textContent=v;document.getElementById(id).appendChild(o)})});
+  STATUSES.forEach(v=>{['f-status','fg-status'].forEach(id=>{const o=document.createElement('option');o.value=v;o.textContent=v;document.getElementById(id).appendChild(o)})});
+  ALL_TEAMS.forEach(v=>{['f-team','fg-team'].forEach(id=>{const o=document.createElement('option');o.value=v;o.textContent=v;document.getElementById(id).appendChild(o)})});
+}
+
+// OVERVIEW
+let ovChart=null, ovColorMode='program';
+function setOvColor(m){
+  ovColorMode=m;
+  ['prog','ou','status'].forEach(x=>document.getElementById('ov-'+x+'-btn').className='toggle-btn'+(m===x||m===x.replace('prog','program')||(m==='program'&&x==='prog')||(m==='ou'&&x==='ou')||(m==='status'&&x==='status')?' active':''));
+  document.getElementById('ov-prog-btn').className='toggle-btn'+(m==='program'?' active':'');
+  document.getElementById('ov-ou-btn').className='toggle-btn'+(m==='ou'?' active':'');
+  document.getElementById('ov-status-btn').className='toggle-btn'+(m==='status'?' active':'');
+  renderOverview();
+}
+function renderOverview(){
+  const total=data.length;
+  const totalA=data.reduce((a,d)=>a+d.span,0);
+  const multi=data.filter(d=>d.span>1).length;
+  const maxSpan=Math.max(...data.map(d=>d.span));
+  document.getElementById('ov-metrics').innerHTML=`
+    <div class="metric"><div class="label">Total items</div><div class="val">${total}</div></div>
+    <div class="metric"><div class="label">Total team assignments</div><div class="val">${totalA}</div><div class="sub">vs ${total} items</div></div>
+    <div class="metric"><div class="label">Multi-team items</div><div class="val">${multi}</div><div class="sub">${Math.round(multi/total*100)}% of portfolio</div></div>
+    <div class="metric"><div class="label">Max team span</div><div class="val">${maxSpan}</div><div class="sub">teams on one item</div></div>
+    <div class="metric"><div class="label">Active items</div><div class="val">${data.filter(d=>d.status==='Active').length}</div></div>
+    <div class="metric"><div class="label">Next items</div><div class="val">${data.filter(d=>d.status==='Next').length}</div></div>
+  `;
+  const colorMap=ovColorMode==='program'?PROG_COLORS:ovColorMode==='ou'?OU_COLORS:STATUS_COLORS;
+  makeLegend('ov-legend',colorMap);
+  const sorted=[...data].sort((a,b)=>b.span-a.span);
+  const h=Math.max(400,sorted.length*22+60);
+  document.getElementById('ov-chart-wrap').style.height=h+'px';
+  const colors=sorted.map(d=>{
+    const k=ovColorMode==='program'?d.program:ovColorMode==='ou'?d.ou:d.status;
+    return(colorMap[k]||'#aaa')+'cc';
+  });
+  if(ovChart)ovChart.destroy();
+  ovChart=new Chart(document.getElementById('ov-chart'),{
+    type:'bar',
+    data:{labels:sorted.map(d=>d.key),datasets:[{label:'Team span',data:sorted.map(d=>d.span),backgroundColor:colors,borderRadius:2}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{title:([i])=>{const d=sorted[i.dataIndex];return`${d.key}: ${d.summary}`},label:(i)=>`Teams: ${sorted[i.dataIndex].span} | ${sorted[i.dataIndex].program} | ${sorted[i.dataIndex].status}`}}},scales:{x:{ticks:{stepSize:1,font:{size:11}},title:{display:true,text:'Number of teams assigned',font:{size:11}}},y:{ticks:{font:{size:10}}}}}
+  });
+}
+
+// OPERATING UNIT
+let ouChart=null, ouMode='items';
+function setOuMode(m){ouMode=m;document.getElementById('ou-items-btn').className='toggle-btn'+(m==='items'?' active':'');document.getElementById('ou-assign-btn').className='toggle-btn'+(m==='assignments'?' active':'');renderOU()}
+function renderOU(){
+  makeLegend('ou-legend',PROG_COLORS);
+  const datasets=PROGRAMS.map(prog=>({
+    label:prog,
+    data:OUS.map(ou=>{
+      const rows=data.filter(d=>d.ou===ou&&d.program===prog);
+      return ouMode==='items'?rows.length:rows.reduce((a,d)=>a+d.span,0);
+    }),
+    backgroundColor:(PROG_COLORS[prog]||'#888')+'cc'
+  }));
+  if(ouChart)ouChart.destroy();
+  ouChart=new Chart(document.getElementById('ou-chart'),{
+    type:'bar',data:{labels:OUS,datasets},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{stacked:true,ticks:{font:{size:11}}},y:{stacked:true,title:{display:true,text:ouMode==='items'?'Items':'Weighted assignments',font:{size:11}},ticks:{font:{size:11}}}}}
+  });
+  document.getElementById('ou-body').innerHTML=OUS.map(ou=>{
+    const rows=data.filter(d=>d.ou===ou);
+    const assigns=rows.reduce((a,d)=>a+d.span,0);
+    const breakdown=PROGRAMS.map(p=>{const n=rows.filter(d=>d.program===p).length;return n?`${p}: ${n}`:''}).filter(Boolean).join(' · ');
+    return`<tr><td style="font-weight:500">${ou}</td><td>${rows.length}</td><td>${assigns}</td><td>${avg(rows.map(d=>d.span))}</td><td style="font-size:12px;color:var(--color-text-secondary)">${breakdown}</td></tr>`;
+  }).join('');
+}
+
+// SUB PRODUCT
+let spChart=null, spMode='items';
+function setSpMode(m){spMode=m;document.getElementById('sp-items-btn').className='toggle-btn'+(m==='items'?' active':'');document.getElementById('sp-assign-btn').className='toggle-btn'+(m==='assignments'?' active':'');renderSubprod()}
+function renderSubprod(){
+  makeLegend('sp-legend',OU_COLORS);
+  const datasets=OUS.map((ou,i)=>({
+    label:ou,
+    data:SUBPRODS.map(sp=>{
+      const rows=data.filter(d=>d.subprod===sp&&d.ou===ou);
+      return spMode==='items'?rows.length:rows.reduce((a,d)=>a+d.span,0);
+    }),
+    backgroundColor:(OU_COLORS[ou]||TEAM_PALETTE[i%TEAM_PALETTE.length])+'cc'
+  }));
+  const h=Math.max(300,SUBPRODS.length*28+80);
+  document.getElementById('sp-chart').parentElement.style.height=h+'px';
+  if(spChart)spChart.destroy();
+  spChart=new Chart(document.getElementById('sp-chart'),{
+    type:'bar',data:{labels:SUBPRODS,datasets},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{stacked:true,ticks:{font:{size:11}}},y:{stacked:true,ticks:{font:{size:10}}}}}
+  });
+  document.getElementById('sp-body').innerHTML=SUBPRODS.map(sp=>{
+    const rows=data.filter(d=>d.subprod===sp);
+    return`<tr><td style="font-weight:500">${sp}</td><td>${rows.length}</td><td>${rows.reduce((a,d)=>a+d.span,0)}</td><td>${avg(rows.map(d=>d.span))}</td></tr>`;
+  }).join('');
+}
+
+// DELIVERY PROGRAM
+let dpChart=null, dpMode='items';
+function setDpMode(m){dpMode=m;document.getElementById('dp-items-btn').className='toggle-btn'+(m==='items'?' active':'');document.getElementById('dp-assign-btn').className='toggle-btn'+(m==='assignments'?' active':'');renderProgram()}
+function renderProgram(){
+  makeLegend('dp-legend',STATUS_COLORS);
+  const datasets=STATUSES.map(st=>({
+    label:st,
+    data:PROGRAMS.map(prog=>{
+      const rows=data.filter(d=>d.program===prog&&d.status===st);
+      return dpMode==='items'?rows.length:rows.reduce((a,d)=>a+d.span,0);
+    }),
+    backgroundColor:(STATUS_COLORS[st]||'#888')+'cc'
+  }));
+  if(dpChart)dpChart.destroy();
+  dpChart=new Chart(document.getElementById('dp-chart'),{
+    type:'bar',data:{labels:PROGRAMS,datasets},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{stacked:true,ticks:{font:{size:11}}},y:{stacked:true,title:{display:true,text:dpMode==='items'?'Items':'Weighted assignments',font:{size:11}}}}}
+  });
+  document.getElementById('dp-body').innerHTML=PROGRAMS.map(prog=>{
+    const rows=data.filter(d=>d.program===prog);
+    const assigns=rows.reduce((a,d)=>a+d.span,0);
+    const multi=rows.filter(d=>d.span>1).length;
+    return`<tr><td>${badge(prog,PROG_COLORS)}</td><td>${rows.length}</td><td>${assigns}</td><td>${avg(rows.map(d=>d.span))}</td><td>${multi} (${Math.round(multi/Math.max(rows.length,1)*100)}%)</td></tr>`;
+  }).join('');
+}
+
+// STATUS
+let stChart=null, stMode='items';
+function setStMode(m){stMode=m;document.getElementById('st-items-btn').className='toggle-btn'+(m==='items'?' active':'');document.getElementById('st-assign-btn').className='toggle-btn'+(m==='assignments'?' active':'');renderStatus()}
+function renderStatus(){
+  const datasets=PROGRAMS.map((prog,i)=>({
+    label:prog,
+    data:STATUSES.map(st=>{
+      const rows=data.filter(d=>d.status===st&&d.program===prog);
+      return stMode==='items'?rows.length:rows.reduce((a,d)=>a+d.span,0);
+    }),
+    backgroundColor:(PROG_COLORS[prog]||TEAM_PALETTE[i%TEAM_PALETTE.length])+'cc'
+  }));
+  if(stChart)stChart.destroy();
+  stChart=new Chart(document.getElementById('st-chart'),{
+    type:'bar',data:{labels:STATUSES,datasets},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{stacked:true,ticks:{font:{size:12}}},y:{stacked:true,title:{display:true,text:stMode==='items'?'Items':'Weighted assignments',font:{size:11}}}}}
+  });
+  const rows=[];
+  STATUSES.forEach(st=>PROGRAMS.forEach(prog=>{
+    const items=data.filter(d=>d.status===st&&d.program===prog);
+    if(items.length)rows.push({st,prog,items});
+  }));
+  document.getElementById('st-body').innerHTML=rows.map(({st,prog,items})=>`<tr>
+    <td>${badge(st,STATUS_COLORS)}</td><td>${badge(prog,PROG_COLORS)}</td>
+    <td>${items.length}</td><td>${items.reduce((a,d)=>a+d.span,0)}</td><td>${avg(items.map(d=>d.span))}</td>
+  </tr>`).join('');
+}
+
+// TEAM
+let teamChart=null;
+function renderTeam(){
+  const td={};
+  ALL_TEAMS.forEach(t=>{td[t]={items:0,weighted:0}});
+  data.forEach(d=>d.teams.forEach(t=>{if(td[t]){td[t].items++;td[t].weighted+=d.span}}));
+  const sorted=Object.entries(td).filter(([,v])=>v.items>0).sort((a,b)=>b[1].weighted-a[1].weighted);
+  const h=Math.max(400,sorted.length*28+80);
+  document.getElementById('team-chart-wrap').style.height=h+'px';
+  document.getElementById('team-legend').innerHTML=`
+    <span class="legend-item"><span class="legend-dot" style="background:#378ADD"></span>Weighted load (sum of team spans)</span>
+    <span class="legend-item"><span class="legend-dot" style="background:rgba(0,0,0,0.15)"></span>Raw item count</span>
+  `;
+  if(teamChart)teamChart.destroy();
+  teamChart=new Chart(document.getElementById('team-chart'),{
+    type:'bar',
+    data:{labels:sorted.map(e=>e[0]),datasets:[
+      {label:'Weighted load',data:sorted.map(e=>e[1].weighted),backgroundColor:'#378ADD99',borderRadius:3},
+      {label:'Raw items',data:sorted.map(e=>e[1].items),backgroundColor:'rgba(0,0,0,0.12)',borderRadius:3}
+    ]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>`${ctx.dataset.label}: ${ctx.raw}`}}},scales:{x:{ticks:{font:{size:11}}},y:{ticks:{font:{size:10}}}}}
+  });
+}
+
+// ITEM LIST
+function renderList(){
+  const ou=document.getElementById('f-ou').value;
+  const prog=document.getElementById('f-prog').value;
+  const st=document.getElementById('f-status').value;
+  const tm=document.getElementById('f-team').value;
+  const rows=data.filter(d=>(!ou||d.ou===ou)&&(!prog||d.program===prog)&&(!st||d.status===st)&&(!tm||d.teams.includes(tm)));
+  const sorted=[...rows].sort((a,b)=>b.span-a.span);
+  const totalA=rows.reduce((a,d)=>a+d.span,0);
+  document.getElementById('list-metrics').innerHTML=`
+    <div class="metric"><div class="label">Items</div><div class="val">${rows.length}</div></div>
+    <div class="metric"><div class="label">Team assignments</div><div class="val">${totalA}</div></div>
+    <div class="metric"><div class="label">Multi-team</div><div class="val">${rows.filter(d=>d.span>1).length}</div></div>
+    <div class="metric"><div class="label">Avg span</div><div class="val">${avg(rows.map(d=>d.span))}</div></div>
+  `;
+  document.getElementById('list-body').innerHTML=sorted.map(r=>`<tr>
+    <td style="font-family:var(--font-mono,monospace);font-size:11px;color:var(--color-text-secondary)">${r.key}</td>
+    <td style="max-width:200px;font-size:12px">${r.summary}</td>
+    <td>${badge(r.ou,OU_COLORS)}</td>
+    <td style="font-size:12px">${r.subprod}</td>
+    <td>${badge(r.program,PROG_COLORS)}</td>
+    <td>${badge(r.status,STATUS_COLORS)}</td>
+    <td style="text-align:center">${spanBadge(r.span)}</td>
+    <td style="font-size:11px;color:var(--color-text-secondary);max-width:220px">${r.teams.join(', ')||'—'}</td>
+  </tr>`).join('');
+}
+
+// GANTT
+const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function fakeD(key){const h=key.split('').reduce((a,c)=>a+c.charCodeAt(0),0);const s=h%9;return{s,e:Math.min(s+(1+h%3),11)}}
+function renderGantt(){
+  const prog=document.getElementById('fg-prog').value;
+  const st=document.getElementById('fg-status').value;
+  const tm=document.getElementById('fg-team').value;
+  const rows=data.filter(d=>(!prog||d.program===prog)&&(!st||d.status===st)&&(!tm||d.teams.includes(tm))).slice(0,80);
+  let html=`<thead><tr><th>Key</th><th>Summary</th><th>Program</th><th>Status</th><th style="text-align:center">Span</th>${MONTHS.map(m=>`<th>${m}</th>`).join('')}</tr></thead><tbody>`;
+  rows.forEach(r=>{
+    const {s,e}=fakeD(r.key);
+    const col=PROG_COLORS[r.program]||'#888';
+    const bh=Math.max(10,Math.min(22,r.span*4));
+    html+=`<tr><td style="font-family:var(--font-mono,monospace);font-size:11px">${r.key}</td>
+      <td style="max-width:160px;font-size:12px">${r.summary}</td>
+      <td>${badge(r.program,PROG_COLORS)}</td>
+      <td>${badge(r.status,STATUS_COLORS)}</td>
+      <td style="text-align:center">${spanBadge(r.span)}</td>`;
+    MONTHS.forEach((_,i)=>{
+      html+=i>=s&&i<=e?`<td style="padding:3px"><div style="background:${col};height:${bh}px;border-radius:3px;opacity:0.8" title="${r.key} · ${r.span} team(s)"></div></td>`:`<td></td>`;
+    });
+    html+=`</tr>`;
+  });
+  document.getElementById('gantt-table').innerHTML=html+'</tbody>';
+}
+
+function showView(v,btn){
+  document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active'));
+  document.getElementById('view-'+v).classList.add('active');
+  btn.classList.add('active');
+  if(v==='overview')renderOverview();
+  if(v==='ou')renderOU();
+  if(v==='subprod')renderSubprod();
+  if(v==='program')renderProgram();
+  if(v==='status')renderStatus();
+  if(v==='team')renderTeam();
+  if(v==='list')renderList();
+  if(v==='gantt')renderGantt();
+}
+
+populate();
+renderOverview();
+</script>
+</body>
+</html>
