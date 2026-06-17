@@ -1,279 +1,318 @@
-import { useState, useRef, useCallback } from "react";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Domain Ownership — Zelis Payments</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #0f1117; color: #e8eaf0; min-height: 100vh; padding: 16px 16px 40px; }
+  input { font-family: inherit; }
+  button { font-family: inherit; }
+</style>
+</head>
+<body>
+<div id="root"></div>
 
-const STORAGE_KEY = "domain-ownership-v4";
+<script type="text/babel">
+const SK = "zo-v6";
 
-const defaultData = {
-  payer: {
-    domains: [
-      { id: "d-p1", label: "Configuration & Preferences" },
-      { id: "d-p2", label: "Print & Document" },
-      { id: "d-p3", label: "835 & Remittance" },
-      { id: "d-p4", label: "Communications" },
-      { id: "d-p5", label: "Tooling & Servicing" },
-    ],
-    products: [
-      { id: "pr-p1", label: "Payer Payment Preferences" },
-      { id: "pr-p2", label: "Client Configs" },
-      { id: "pr-p3", label: "835 Configuration" },
-      { id: "pr-p4", label: "Print Facility" },
-      { id: "pr-p5", label: "ZAPP/DOCS" },
-      { id: "pr-p6", label: "Tax print/mail" },
-      { id: "pr-p7", label: "Full 1099 services" },
-      { id: "pr-p8", label: "VCCs" },
-      { id: "pr-p9", label: "ZAPP ePay" },
-      { id: "pr-p10", label: "ZPASS ePay" },
-      { id: "pr-p11", label: "Payspan Core" },
-      { id: "pr-p12", label: "Banking / NACHA" },
-      { id: "pr-p13", label: "835 Distribution" },
-      { id: "pr-p14", label: "835 Generation" },
-      { id: "pr-p15", label: "Comms Builder" },
-      { id: "pr-p16", label: "Member ID Cards" },
-      { id: "pr-p17", label: "Launchpad" },
-      { id: "pr-p18", label: "Escheatment" },
-    ],
-  },
-  payments: {
-    domains: [
-      { id: "d-c1", label: "Payments Engine Spine" },
-      { id: "d-c2", label: "Compliance & Controls" },
-    ],
-    products: [
-      { id: "pr-c1", label: "Intake" },
-      { id: "pr-c2", label: "Settlement" },
-      { id: "pr-c3", label: "Reconciliation" },
-      { id: "pr-c4", label: "Exceptions" },
-      { id: "pr-c5", label: "OFAC" },
-      { id: "pr-c6", label: "ePayments Center" },
-      { id: "pr-c7", label: "Conduit (SaaS)" },
-      { id: "pr-c8", label: "Funding" },
-      { id: "pr-c9", label: "Disbursement" },
-    ],
-  },
-  provider: {
-    domains: [
-      { id: "d-v1", label: "Enrollment & Identity" },
-      { id: "d-v2", label: "Security & Compliance" },
-      { id: "d-v3", label: "Analytics" },
-    ],
-    products: [
-      { id: "pr-v1", label: "Enrollment" },
-      { id: "pr-v2", label: "Payee Profile" },
-      { id: "pr-v3", label: "Provider Bank Accounts" },
-      { id: "pr-v4", label: "Payment Preferences" },
-      { id: "pr-v5", label: "Fraud" },
-      { id: "pr-v6", label: "Provider Facing Products" },
-      { id: "pr-v7", label: "Provider Servicing Tools" },
-      { id: "pr-v8", label: "Claims Analytics" },
-    ],
-  },
+const C = {
+  payer:    { domain:{bg:"#1e3a5f",bd:"#2563eb",tx:"#93c5fd"}, product:{bg:"#0f2040",bd:"#1d4ed8",tx:"#bfdbfe"}, cb:"rgba(37,99,235,0.10)", cs:"#2563eb", label:"#3b82f6" },
+  payments: { domain:{bg:"#14342a",bd:"#059669",tx:"#6ee7b7"}, product:{bg:"#0a1f18",bd:"#047857",tx:"#a7f3d0"}, cb:"rgba(16,185,129,0.11)", cs:"#059669", label:"#10b981" },
+  provider: { domain:{bg:"#3b1a2e",bd:"#9d174d",tx:"#f9a8d4"}, product:{bg:"#250f1d",bd:"#831843",tx:"#fbcfe8"}, cb:"rgba(157,23,77,0.10)", cs:"#9d174d", label:"#ec4899" },
 };
+const ZONES = ["payer","payments","provider"];
+const ZL = { payer:"Payer", payments:"Payments", provider:"Provider" };
 
-const COLORS = {
-  payer:    { domain: { bg:"#1e3a5f", border:"#2563eb", text:"#93c5fd" }, product: { bg:"#0f2040", border:"#1d4ed8", text:"#bfdbfe" }, fill:"rgba(37,99,235,0.10)", stroke:"#2563eb", label:"#3b82f6" },
-  payments: { domain: { bg:"#14342a", border:"#059669", text:"#6ee7b7" }, product: { bg:"#0a1f18", border:"#047857", text:"#a7f3d0" }, fill:"rgba(16,185,129,0.13)", stroke:"#059669", label:"#10b981" },
-  provider: { domain: { bg:"#3b1a2e", border:"#9d174d", text:"#f9a8d4" }, product: { bg:"#250f1d", border:"#831843", text:"#fbcfe8" }, fill:"rgba(157,23,77,0.10)", stroke:"#9d174d", label:"#ec4899" },
-};
+const DEF = [
+  {id:"d-p1",label:"Configuration & Preferences",type:"domain",zone:"payer"},
+  {id:"d-p2",label:"Print & Document",type:"domain",zone:"payer"},
+  {id:"d-p3",label:"835 & Remittance",type:"domain",zone:"payer"},
+  {id:"d-p4",label:"Communications",type:"domain",zone:"payer"},
+  {id:"d-p5",label:"Tooling & Servicing",type:"domain",zone:"payer"},
+  {id:"r-p1",label:"Payer Payment Preferences",type:"product",zone:"payer"},
+  {id:"r-p2",label:"Client Configs",type:"product",zone:"payer"},
+  {id:"r-p3",label:"835 Configuration",type:"product",zone:"payer"},
+  {id:"r-p4",label:"Print Facility",type:"product",zone:"payer"},
+  {id:"r-p5",label:"ZAPP/DOCS",type:"product",zone:"payer"},
+  {id:"r-p6",label:"Tax print/mail",type:"product",zone:"payer"},
+  {id:"r-p7",label:"Full 1099 services",type:"product",zone:"payer"},
+  {id:"r-p8",label:"VCCs",type:"product",zone:"payer"},
+  {id:"r-p9",label:"ZAPP ePay",type:"product",zone:"payer"},
+  {id:"r-p10",label:"ZPASS ePay",type:"product",zone:"payer"},
+  {id:"r-p11",label:"Payspan Core",type:"product",zone:"payer"},
+  {id:"r-p12",label:"Banking / NACHA",type:"product",zone:"payer"},
+  {id:"r-p13",label:"835 Distribution",type:"product",zone:"payer"},
+  {id:"r-p14",label:"835 Generation",type:"product",zone:"payer"},
+  {id:"r-p15",label:"Comms Builder",type:"product",zone:"payer"},
+  {id:"r-p16",label:"Member ID Cards",type:"product",zone:"payer"},
+  {id:"r-p17",label:"Launchpad",type:"product",zone:"payer"},
+  {id:"r-p18",label:"Escheatment",type:"product",zone:"payer"},
+  {id:"d-c1",label:"Payments Engine Spine",type:"domain",zone:"payments"},
+  {id:"d-c2",label:"Compliance & Controls",type:"domain",zone:"payments"},
+  {id:"r-c1",label:"Intake",type:"product",zone:"payments"},
+  {id:"r-c2",label:"Settlement",type:"product",zone:"payments"},
+  {id:"r-c3",label:"Reconciliation",type:"product",zone:"payments"},
+  {id:"r-c4",label:"Exceptions",type:"product",zone:"payments"},
+  {id:"r-c5",label:"OFAC",type:"product",zone:"payments"},
+  {id:"r-c6",label:"ePayments Center",type:"product",zone:"payments"},
+  {id:"r-c7",label:"Conduit (SaaS)",type:"product",zone:"payments"},
+  {id:"r-c8",label:"Funding",type:"product",zone:"payments"},
+  {id:"r-c9",label:"Disbursement",type:"product",zone:"payments"},
+  {id:"d-v1",label:"Enrollment & Identity",type:"domain",zone:"provider"},
+  {id:"d-v2",label:"Security & Compliance",type:"domain",zone:"provider"},
+  {id:"d-v3",label:"Analytics",type:"domain",zone:"provider"},
+  {id:"r-v1",label:"Enrollment",type:"product",zone:"provider"},
+  {id:"r-v2",label:"Payee Profile",type:"product",zone:"provider"},
+  {id:"r-v3",label:"Provider Bank Accounts",type:"product",zone:"provider"},
+  {id:"r-v4",label:"Payment Preferences",type:"product",zone:"provider"},
+  {id:"r-v5",label:"Fraud",type:"product",zone:"provider"},
+  {id:"r-v6",label:"Provider Facing Products",type:"product",zone:"provider"},
+  {id:"r-v7",label:"Provider Servicing Tools",type:"product",zone:"provider"},
+  {id:"r-v8",label:"Claims Analytics",type:"product",zone:"provider"},
+];
 
-function flattenDefault(data) {
-  const out = [];
-  for (const [zone, { domains, products }] of Object.entries(data)) {
-    domains.forEach(d => out.push({ ...d, type:"domain", zone }));
-    products.forEach(p => out.push({ ...p, type:"product", zone }));
+function load() {
+  try { const r = localStorage.getItem(SK); if (r) return JSON.parse(r); } catch(e) {}
+  return DEF.map(x => ({ ...x }));
+}
+function save(items) {
+  try { localStorage.setItem(SK, JSON.stringify(items)); } catch(e) {}
+}
+
+function Chip({ item, onEdit, onDelete, onDragStart }) {
+  const c = C[item.zone][item.type];
+  const [editing, setEditing] = React.useState(false);
+  const [val, setVal] = React.useState(item.label);
+  const inputRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (editing && inputRef.current) inputRef.current.focus();
+  }, [editing]);
+
+  function commitEdit() {
+    const t = val.trim();
+    if (t) onEdit(item.id, t);
+    setEditing(false);
   }
-  return out;
-}
 
-function loadState() {
-  try { const r = localStorage.getItem(STORAGE_KEY); if (r) return JSON.parse(r); } catch {}
-  return null;
-}
-
-function Chip({ item, zone, onDragStart, onEdit, onDelete, isEditing, editVal, onEditChange, onEditSave, onEditKey }) {
-  const c = COLORS[zone][item.type];
   return (
-    <div draggable onDragStart={e => onDragStart(e, item)}
-      style={{ display:"inline-flex", alignItems:"center", gap:3, padding:"2px 7px", borderRadius:4, fontSize:10, fontWeight:500, background:c.bg, border:`1px solid ${c.border}`, color:c.text, cursor:"grab", userSelect:"none", margin:"2px", lineHeight:1.5 }}>
-      {isEditing
-        ? <input autoFocus value={editVal} onChange={onEditChange} onKeyDown={onEditKey} onBlur={onEditSave}
-            style={{ background:"transparent", border:"none", outline:"none", color:c.text, fontSize:10, width:Math.max(50,editVal.length*6.5), fontWeight:500 }}
-            onClick={e=>e.stopPropagation()} />
-        : <span>{item.label}</span>}
+    <span
+      draggable={!editing}
+      onDragStart={e => onDragStart(e, item.id)}
+      style={{ display:"inline-flex", alignItems:"center", gap:3, padding:"2px 7px", borderRadius:4, fontSize:10, fontWeight:500, background:c.bg, border:"1px solid "+c.bd, color:c.tx, cursor:editing?"default":"grab", userSelect:"none", margin:2, lineHeight:1.5 }}
+    >
+      {editing
+        ? <input
+            ref={inputRef}
+            value={val}
+            onChange={e => setVal(e.target.value)}
+            onBlur={commitEdit}
+            onKeyDown={e => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") setEditing(false); }}
+            style={{ background:"transparent", border:"none", outline:"none", color:c.tx, fontSize:10, fontWeight:500, width:Math.max(50, val.length*7) }}
+          />
+        : <span>{item.label}</span>
+      }
       <span style={{ display:"inline-flex", gap:1, marginLeft:2 }}>
-        <button onClick={e=>{e.stopPropagation();onEdit(item.id);}} style={{ background:"none",border:"none",cursor:"pointer",color:c.text,opacity:0.6,padding:"0 1px",fontSize:9,lineHeight:1 }}>✎</button>
-        <button onClick={e=>{e.stopPropagation();onDelete(item.id);}} style={{ background:"none",border:"none",cursor:"pointer",color:c.text,opacity:0.6,padding:"0 1px",fontSize:9,lineHeight:1 }}>×</button>
+        <button
+          onClick={e => { e.stopPropagation(); setEditing(true); setVal(item.label); }}
+          style={{ background:"none", border:"none", cursor:"pointer", color:c.tx, opacity:.6, padding:"0 1px", fontSize:9 }}
+        >&#9998;</button>
+        <button
+          onClick={e => { e.stopPropagation(); onDelete(item.id); }}
+          style={{ background:"none", border:"none", cursor:"pointer", color:c.tx, opacity:.6, padding:"0 1px", fontSize:9 }}
+        >&times;</button>
       </span>
-    </div>
+    </span>
   );
 }
 
-function Column({ zoneKey, items, onDragStart, onDrop, onEdit, onDelete, editingId, editVal, onEditChange, onEditSave, onEditKey, onAdd, isDragOver, onDragEnter, onDragLeave }) {
-  const c = COLORS[zoneKey];
-  const domains = items.filter(i => i.type === "domain");
+function Column({ zone, items, dragOver, onDragOver, onDrop, onDragEnter, onDragLeave, onDragStart, onEdit, onDelete, onAdd }) {
+  const c = C[zone];
+  const domains  = items.filter(i => i.type === "domain");
   const products = items.filter(i => i.type === "product");
-  const label = zoneKey === "payer" ? "Payer" : zoneKey === "payments" ? "Payments" : "Provider";
+  const activeBg = dragOver ? c.cb.replace("0.10","0.22").replace("0.11","0.22") : c.cb;
 
   return (
-    <div onDrop={e=>{e.preventDefault();onDrop(e,zoneKey);}} onDragOver={e=>e.preventDefault()}
-      onDragEnter={()=>onDragEnter(zoneKey)} onDragLeave={onDragLeave}
-      style={{ flex:1, borderRadius:12, border:`2px solid ${c.stroke}`, background: isDragOver ? c.fill.replace("0.10","0.20").replace("0.13","0.24") : c.fill, transition:"background 0.15s", padding:"12px 10px 10px", display:"flex", flexDirection:"column", gap:8, minWidth:0 }}>
-      <div style={{ fontSize:12, fontWeight:600, color:c.label, letterSpacing:"0.02em", marginBottom:2, textAlign:"center" }}>{label}</div>
+    <div
+      onDragOver={onDragOver}
+      onDrop={e => onDrop(e, zone)}
+      onDragEnter={() => onDragEnter(zone)}
+      onDragLeave={onDragLeave}
+      style={{ flex:1, borderRadius:12, border:"2px solid "+c.cs, background:activeBg, transition:"background .15s", padding:"12px 10px 10px", display:"flex", flexDirection:"column", gap:8, minWidth:0 }}
+    >
+      <div style={{ fontSize:12, fontWeight:600, color:c.label, textAlign:"center", marginBottom:2 }}>{ZL[zone]}</div>
+
       {domains.length > 0 && (
         <div>
-          <div style={{ fontSize:9, letterSpacing:"0.1em", textTransform:"uppercase", color:"#64748b", marginBottom:3, fontWeight:600 }}>Domains</div>
+          <div style={{ fontSize:9, letterSpacing:".1em", textTransform:"uppercase", color:"#555e7a", fontWeight:600, marginBottom:3 }}>Domains</div>
           <div style={{ display:"flex", flexWrap:"wrap" }}>
-            {domains.map(d => <Chip key={d.id} item={d} zone={zoneKey} onDragStart={onDragStart} onEdit={onEdit} onDelete={onDelete}
-              isEditing={editingId===d.id} editVal={editVal} onEditChange={onEditChange} onEditSave={onEditSave} onEditKey={onEditKey} />)}
+            {domains.map(d => <Chip key={d.id} item={d} onEdit={onEdit} onDelete={onDelete} onDragStart={onDragStart} />)}
           </div>
         </div>
       )}
+
       {products.length > 0 && (
         <div>
-          <div style={{ fontSize:9, letterSpacing:"0.1em", textTransform:"uppercase", color:"#64748b", marginBottom:3, fontWeight:600 }}>Products</div>
+          <div style={{ fontSize:9, letterSpacing:".1em", textTransform:"uppercase", color:"#555e7a", fontWeight:600, marginBottom:3 }}>Products</div>
           <div style={{ display:"flex", flexWrap:"wrap" }}>
-            {products.map(p => <Chip key={p.id} item={p} zone={zoneKey} onDragStart={onDragStart} onEdit={onEdit} onDelete={onDelete}
-              isEditing={editingId===p.id} editVal={editVal} onEditChange={onEditChange} onEditSave={onEditSave} onEditKey={onEditKey} />)}
+            {products.map(p => <Chip key={p.id} item={p} onEdit={onEdit} onDelete={onDelete} onDragStart={onDragStart} />)}
           </div>
         </div>
       )}
+
       {domains.length === 0 && products.length === 0 && (
-        <div style={{ color:"#475569", fontSize:10, textAlign:"center", padding:"16px 0", opacity:0.6 }}>Drop items here</div>
+        <div style={{ color:"#555e7a", fontSize:10, textAlign:"center", padding:"12px 0" }}>Drop items here</div>
       )}
+
       <div style={{ marginTop:"auto", display:"flex", gap:5, paddingTop:8 }}>
-        <button onClick={()=>onAdd(zoneKey,"domain")} style={{ flex:1, fontSize:9, padding:"4px 0", borderRadius:4, border:`1px solid ${c.domain.border}`, background:c.domain.bg, color:c.domain.text, cursor:"pointer" }}>+ Domain</button>
-        <button onClick={()=>onAdd(zoneKey,"product")} style={{ flex:1, fontSize:9, padding:"4px 0", borderRadius:4, border:`1px solid ${c.product.border}`, background:c.product.bg, color:c.product.text, cursor:"pointer" }}>+ Product</button>
+        <button onClick={() => onAdd(zone,"domain")}
+          style={{ flex:1, fontSize:9, padding:"4px 0", borderRadius:4, border:"1px solid "+c.domain.bd, background:c.domain.bg, color:c.domain.tx, cursor:"pointer" }}>+ Domain</button>
+        <button onClick={() => onAdd(zone,"product")}
+          style={{ flex:1, fontSize:9, padding:"4px 0", borderRadius:4, border:"1px solid "+c.product.bd, background:c.product.bg, color:c.product.tx, cursor:"pointer" }}>+ Product</button>
       </div>
     </div>
   );
 }
 
-function VennDiagram({ counts }) {
+function Modal({ ctx, onConfirm, onClose }) {
+  const [val, setVal] = React.useState("");
+  const inputRef = React.useRef(null);
+
+  React.useEffect(() => {
+    setVal("");
+    if (ctx && inputRef.current) setTimeout(() => inputRef.current && inputRef.current.focus(), 50);
+  }, [ctx]);
+
+  React.useEffect(() => {
+    const fn = e => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", fn);
+    return () => window.removeEventListener("keydown", fn);
+  }, [onClose]);
+
+  if (!ctx) return null;
+  const c = C[ctx.zone][ctx.type];
+
   return (
-    <svg viewBox="0 0 500 200" style={{ width:"100%", maxWidth:500, display:"block", margin:"0 auto" }}>
-      {/* Left circle — Payer */}
-      <ellipse cx="185" cy="100" rx="155" ry="88" fill="rgba(37,99,235,0.10)" stroke="#2563eb" strokeWidth="1.5" />
-      {/* Right circle — Provider */}
-      <ellipse cx="315" cy="100" rx="155" ry="88" fill="rgba(157,23,77,0.10)" stroke="#9d174d" strokeWidth="1.5" />
-      {/* Overlap tint */}
-      <clipPath id="venn-left"><ellipse cx="185" cy="100" rx="155" ry="88" /></clipPath>
-      <ellipse cx="315" cy="100" rx="155" ry="88" fill="rgba(16,185,129,0.18)" clipPath="url(#venn-left)" />
-
-      {/* Labels */}
-      <text x="108" y="96" textAnchor="middle" fill="#3b82f6" fontSize="14" fontWeight="600">Payer</text>
-      <text x="108" y="113" textAnchor="middle" fill="#3b82f6" fontSize="10" opacity="0.7">{counts.payer.d}d · {counts.payer.p}p</text>
-
-      <text x="250" y="96" textAnchor="middle" fill="#10b981" fontSize="13" fontWeight="600">Payments</text>
-      <text x="250" y="113" textAnchor="middle" fill="#10b981" fontSize="10" opacity="0.7">{counts.payments.d}d · {counts.payments.p}p</text>
-
-      <text x="392" y="96" textAnchor="middle" fill="#ec4899" fontSize="14" fontWeight="600">Provider</text>
-      <text x="392" y="113" textAnchor="middle" fill="#ec4899" fontSize="10" opacity="0.7">{counts.provider.d}d · {counts.provider.p}p</text>
-    </svg>
+    <div
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.55)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:999, padding:20 }}
+    >
+      <div style={{ background:"#1f2435", border:"1px solid #3d4460", borderRadius:12, padding:22, width:300, maxWidth:"100%" }}>
+        <div style={{ fontSize:14, fontWeight:500, marginBottom:4, color:"#e8eaf0" }}>Add {ctx.type} to {ZL[ctx.zone]}</div>
+        <div style={{ fontSize:11, color:"#8b92a8", marginBottom:14 }}>Enter a name and press Enter or click Add.</div>
+        <input
+          ref={inputRef}
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") onConfirm(val); if (e.key === "Escape") onClose(); }}
+          placeholder={ctx.type === "domain" ? "Domain name" : "Product name"}
+          style={{ width:"100%", padding:"7px 10px", background:"#181c27", border:"1px solid #3d4460", borderRadius:6, color:"#e8eaf0", fontSize:13, marginBottom:10, outline:"none", boxSizing:"border-box" }}
+        />
+        <div style={{ display:"flex", gap:8 }}>
+          <button onClick={() => onConfirm(val)}
+            style={{ flex:1, padding:"7px 0", borderRadius:6, border:"1px solid "+c.bd, background:c.bg, color:c.tx, cursor:"pointer", fontWeight:500, fontSize:12 }}>Add</button>
+          <button onClick={onClose}
+            style={{ flex:1, padding:"7px 0", borderRadius:6, border:"1px solid #3d4460", background:"transparent", color:"#8b92a8", cursor:"pointer", fontSize:12 }}>Cancel</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
-export default function App() {
-  const [items, setItems] = useState(() => loadState() || flattenDefault(defaultData));
-  const [editingId, setEditingId] = useState(null);
-  const [editVal, setEditVal] = useState("");
-  const [dragItem, setDragItem] = useState(null);
-  const [dragOver, setDragOver] = useState(null);
-  const [addModal, setAddModal] = useState(null);
-  const [newLabel, setNewLabel] = useState("");
-  const addInputRef = useRef(null);
+function App() {
+  const [items, setItems]     = React.useState(load);
+  const [dragId, setDragId]   = React.useState(null);
+  const [dragOver, setDragOver] = React.useState(null);
+  const [addCtx, setAddCtx]   = React.useState(null);
 
-  const save = useCallback(next => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {} }, []);
-  const updateItems = useCallback(fn => { setItems(prev => { const next = fn(prev); save(next); return next; }); }, [save]);
-
-  const handleDragStart = (e, item) => { setDragItem(item); e.dataTransfer.effectAllowed = "move"; };
-  const handleDrop = (e, zone) => { e.preventDefault(); setDragOver(null); if (!dragItem || dragItem.zone === zone) { setDragItem(null); return; } updateItems(prev => prev.map(i => i.id === dragItem.id ? { ...i, zone } : i)); setDragItem(null); };
-  const handleEdit = id => { const item = items.find(i=>i.id===id); if(!item) return; setEditingId(id); setEditVal(item.label); };
-  const handleEditSave = () => { if(!editingId) return; const t=editVal.trim(); if(t) updateItems(prev=>prev.map(i=>i.id===editingId?{...i,label:t}:i)); setEditingId(null); setEditVal(""); };
-  const handleEditKey = e => { if(e.key==="Enter") handleEditSave(); if(e.key==="Escape"){setEditingId(null);setEditVal("");} };
-  const handleDelete = id => updateItems(prev => prev.filter(i=>i.id!==id));
-  const openAdd = (zone, type) => { setAddModal({zone,type}); setNewLabel(""); setTimeout(()=>addInputRef.current?.focus(),50); };
-  const confirmAdd = () => { const t=newLabel.trim(); if(!t||!addModal) return; updateItems(prev=>[...prev,{id:`x-${Date.now()}`,label:t,type:addModal.type,zone:addModal.zone}]); setAddModal(null); setNewLabel(""); };
+  function update(next) { setItems(next); save(next); }
 
   const byZone = z => items.filter(i => i.zone === z);
-  const counts = {
-    payer:    { d: byZone("payer").filter(i=>i.type==="domain").length,    p: byZone("payer").filter(i=>i.type==="product").length },
-    payments: { d: byZone("payments").filter(i=>i.type==="domain").length, p: byZone("payments").filter(i=>i.type==="product").length },
-    provider: { d: byZone("provider").filter(i=>i.type==="domain").length, p: byZone("provider").filter(i=>i.type==="product").length },
-  };
+  const count  = (z,t) => items.filter(i => i.zone === z && i.type === t).length;
+
+  function handleDragStart(e, id) { setDragId(id); e.dataTransfer.effectAllowed = "move"; }
+  function handleDragOver(e) { e.preventDefault(); }
+  function handleDrop(e, zone) {
+    e.preventDefault(); setDragOver(null);
+    if (!dragId) return;
+    update(items.map(i => i.id === dragId && i.zone !== zone ? { ...i, zone } : i));
+    setDragId(null);
+  }
+  function handleEdit(id, label) { update(items.map(i => i.id === id ? { ...i, label } : i)); }
+  function handleDelete(id)      { update(items.filter(i => i.id !== id)); }
+  function handleAdd(zone, type) { setAddCtx({ zone, type }); }
+  function confirmAdd(val) {
+    const t = val.trim();
+    if (!t) return;
+    update([...items, { id:"x"+Date.now(), label:t, type:addCtx.type, zone:addCtx.zone }]);
+    setAddCtx(null);
+  }
 
   return (
-    <div style={{ fontFamily:"var(--font-sans)", padding:"12px 0 28px" }}>
-      <h2 className="sr-only">Domain ownership — Payer, Payments, Provider</h2>
+    <div style={{ fontFamily:"system-ui,sans-serif", background:"#0f1117", color:"#e8eaf0", minHeight:"100vh", padding:"16px 16px 40px" }}>
 
       {/* Header */}
-      <div style={{ marginBottom:16, paddingBottom:10, borderBottom:"0.5px solid var(--color-border-tertiary)" }}>
-        <div style={{ fontSize:10, letterSpacing:"0.14em", textTransform:"uppercase", color:"var(--color-text-tertiary)", marginBottom:3 }}>Zelis Payments · Alignment Tool</div>
-        <div style={{ fontSize:16, fontWeight:500, color:"var(--color-text-primary)" }}>Domain Ownership</div>
-        <div style={{ fontSize:11, color:"var(--color-text-secondary)", marginTop:2 }}>Drag buttons between zones · ✎ rename · × delete · auto-saves</div>
+      <div style={{ paddingBottom:12, borderBottom:"1px solid #2a2f42", marginBottom:16 }}>
+        <div style={{ fontSize:10, letterSpacing:".14em", textTransform:"uppercase", color:"#555e7a", marginBottom:4 }}>Zelis Payments · Alignment Tool</div>
+        <div style={{ fontSize:17, fontWeight:600 }}>Domain Ownership</div>
+        <div style={{ fontSize:11, color:"#8b92a8", marginTop:3 }}>Drag buttons between zones · ✎ rename · × delete · auto-saves</div>
       </div>
 
       {/* Venn overview */}
-      <div style={{ marginBottom:6 }}>
-        <div style={{ fontSize:10, letterSpacing:"0.1em", textTransform:"uppercase", color:"var(--color-text-tertiary)", marginBottom:8, fontWeight:500 }}>Overview</div>
-        <VennDiagram counts={counts} />
+      <div style={{ marginBottom:4 }}>
+        <div style={{ fontSize:10, letterSpacing:".1em", textTransform:"uppercase", color:"#555e7a", fontWeight:500, marginBottom:8 }}>Overview</div>
+        <svg viewBox="0 0 500 190" style={{ width:"100%", maxWidth:500, display:"block", margin:"0 auto" }}>
+          <defs><clipPath id="vc"><ellipse cx="185" cy="95" rx="150" ry="83"/></clipPath></defs>
+          <ellipse cx="185" cy="95" rx="150" ry="83" fill="rgba(37,99,235,0.10)" stroke="#2563eb" strokeWidth="1.5"/>
+          <ellipse cx="315" cy="95" rx="150" ry="83" fill="rgba(157,23,77,0.10)" stroke="#9d174d" strokeWidth="1.5"/>
+          <ellipse cx="315" cy="95" rx="150" ry="83" fill="rgba(16,185,129,0.18)" clipPath="url(#vc)"/>
+          <text x="100" y="90"  textAnchor="middle" fill="#3b82f6" fontSize="14" fontWeight="600" fontFamily="system-ui,sans-serif">Payer</text>
+          <text x="100" y="108" textAnchor="middle" fill="#3b82f6" fontSize="10" opacity=".7"  fontFamily="system-ui,sans-serif">{count("payer","domain")}d · {count("payer","product")}p</text>
+          <text x="250" y="90"  textAnchor="middle" fill="#10b981" fontSize="13" fontWeight="600" fontFamily="system-ui,sans-serif">Payments</text>
+          <text x="250" y="108" textAnchor="middle" fill="#10b981" fontSize="10" opacity=".7"  fontFamily="system-ui,sans-serif">{count("payments","domain")}d · {count("payments","product")}p</text>
+          <text x="400" y="90"  textAnchor="middle" fill="#ec4899" fontSize="14" fontWeight="600" fontFamily="system-ui,sans-serif">Provider</text>
+          <text x="400" y="108" textAnchor="middle" fill="#ec4899" fontSize="10" opacity=".7"  fontFamily="system-ui,sans-serif">{count("provider","domain")}d · {count("provider","product")}p</text>
+        </svg>
       </div>
 
-      {/* Zoom indicator */}
-      <div style={{ display:"flex", alignItems:"center", gap:10, margin:"14px 0 10px", color:"var(--color-text-tertiary)" }}>
-        <div style={{ flex:1, height:"0.5px", background:"var(--color-border-tertiary)" }} />
-        <span style={{ fontSize:10, letterSpacing:"0.1em", textTransform:"uppercase", whiteSpace:"nowrap" }}>Detailed view</span>
-        <div style={{ flex:1, height:"0.5px", background:"var(--color-border-tertiary)" }} />
+      {/* Divider */}
+      <div style={{ display:"flex", alignItems:"center", gap:10, margin:"14px 0 10px" }}>
+        <div style={{ flex:1, height:1, background:"#2a2f42" }}/>
+        <span style={{ fontSize:10, letterSpacing:".1em", textTransform:"uppercase", color:"#555e7a" }}>Detailed View</span>
+        <div style={{ flex:1, height:1, background:"#2a2f42" }}/>
       </div>
 
       {/* Legend */}
-      <div style={{ display:"flex", gap:12, marginBottom:12, flexWrap:"wrap" }}>
-        {["payer","payments","provider"].map(z => (
-          <div key={z} style={{ display:"flex", gap:5, alignItems:"center" }}>
-            <span style={{ fontSize:10, color:"var(--color-text-secondary)", fontWeight:500 }}>{z==="payer"?"Payer":z==="payments"?"Payments":"Provider"}:</span>
-            <span style={{ padding:"1px 6px", borderRadius:3, fontSize:10, background:COLORS[z].domain.bg, border:`1px solid ${COLORS[z].domain.border}`, color:COLORS[z].domain.text }}>Domain</span>
-            <span style={{ padding:"1px 6px", borderRadius:3, fontSize:10, background:COLORS[z].product.bg, border:`1px solid ${COLORS[z].product.border}`, color:COLORS[z].product.text }}>Product</span>
+      <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:12 }}>
+        {ZONES.map(z => (
+          <div key={z} style={{ display:"flex", gap:5, alignItems:"center", fontSize:10, color:"#8b92a8" }}>
+            <span>{ZL[z]}:</span>
+            <span style={{ padding:"1px 6px", borderRadius:3, fontSize:10, background:C[z].domain.bg, border:"1px solid "+C[z].domain.bd, color:C[z].domain.tx }}>Domain</span>
+            <span style={{ padding:"1px 6px", borderRadius:3, fontSize:10, background:C[z].product.bg, border:"1px solid "+C[z].product.bd, color:C[z].product.tx }}>Product</span>
           </div>
         ))}
       </div>
 
-      {/* Three columns */}
-      <div style={{ display:"flex", gap:8, alignItems:"stretch", width:"100%" }}>
-        {["payer","payments","provider"].map((z,i) => (
-          <>
-            <Column key={z} zoneKey={z} items={byZone(z)}
-              onDragStart={handleDragStart} onDrop={handleDrop}
-              onEdit={handleEdit} onDelete={handleDelete}
-              editingId={editingId} editVal={editVal}
-              onEditChange={e=>setEditVal(e.target.value)}
-              onEditSave={handleEditSave} onEditKey={handleEditKey}
-              onAdd={openAdd} isDragOver={dragOver===z}
-              onDragEnter={()=>setDragOver(z)} onDragLeave={()=>setDragOver(null)} />
-            {i < 2 && (
-              <div key={`sep-${i}`} style={{ width:2, flexShrink:0, alignSelf:"stretch", background: i===0 ? "linear-gradient(to bottom, #1d4ed8, #059669)" : "linear-gradient(to bottom, #059669, #9d174d)", borderRadius:2, opacity:0.4 }} />
-            )}
-          </>
-        ))}
+      {/* Columns */}
+      <div style={{ display:"flex", gap:0, alignItems:"stretch" }}>
+        <Column zone="payer"    items={byZone("payer")}    dragOver={dragOver==="payer"}    onDragOver={handleDragOver} onDrop={handleDrop} onDragEnter={setDragOver} onDragLeave={() => setDragOver(null)} onDragStart={handleDragStart} onEdit={handleEdit} onDelete={handleDelete} onAdd={handleAdd} />
+        <div style={{ width:2, flexShrink:0, background:"linear-gradient(to bottom,#1d4ed8,#059669)", borderRadius:2, opacity:.4 }}/>
+        <Column zone="payments" items={byZone("payments")} dragOver={dragOver==="payments"} onDragOver={handleDragOver} onDrop={handleDrop} onDragEnter={setDragOver} onDragLeave={() => setDragOver(null)} onDragStart={handleDragStart} onEdit={handleEdit} onDelete={handleDelete} onAdd={handleAdd} />
+        <div style={{ width:2, flexShrink:0, background:"linear-gradient(to bottom,#059669,#9d174d)", borderRadius:2, opacity:.4 }}/>
+        <Column zone="provider" items={byZone("provider")} dragOver={dragOver==="provider"} onDragOver={handleDragOver} onDrop={handleDrop} onDragEnter={setDragOver} onDragLeave={() => setDragOver(null)} onDragStart={handleDragStart} onEdit={handleEdit} onDelete={handleDelete} onAdd={handleAdd} />
       </div>
 
-      {/* Add modal */}
-      {addModal && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:999 }}
-          onClick={()=>setAddModal(null)}>
-          <div style={{ background:"var(--color-background-primary)", borderRadius:12, padding:"22px", width:300, border:"0.5px solid var(--color-border-secondary)" }}
-            onClick={e=>e.stopPropagation()}>
-            <div style={{ fontSize:14, fontWeight:500, marginBottom:3, color:"var(--color-text-primary)" }}>
-              Add {addModal.type} to {addModal.zone==="payer"?"Payer":addModal.zone==="payments"?"Payments":"Provider"}
-            </div>
-            <div style={{ fontSize:11, color:"var(--color-text-secondary)", marginBottom:14 }}>Enter a name and press Enter or click Add.</div>
-            <input ref={addInputRef} value={newLabel} onChange={e=>setNewLabel(e.target.value)}
-              onKeyDown={e=>{if(e.key==="Enter")confirmAdd();if(e.key==="Escape")setAddModal(null);}}
-              placeholder={`${addModal.type==="domain"?"Domain":"Product"} name`}
-              style={{ width:"100%", marginBottom:10, boxSizing:"border-box" }} />
-            <div style={{ display:"flex", gap:8 }}>
-              <button onClick={confirmAdd} style={{ flex:1, padding:"7px 0", borderRadius:6, border:`1px solid ${COLORS[addModal.zone][addModal.type].border}`, background:COLORS[addModal.zone][addModal.type].bg, color:COLORS[addModal.zone][addModal.type].text, cursor:"pointer", fontWeight:500, fontSize:12 }}>Add</button>
-              <button onClick={()=>setAddModal(null)} style={{ flex:1, padding:"7px 0", borderRadius:6, border:"0.5px solid var(--color-border-tertiary)", background:"transparent", color:"var(--color-text-secondary)", cursor:"pointer", fontSize:12 }}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal ctx={addCtx} onConfirm={confirmAdd} onClose={() => setAddCtx(null)} />
     </div>
   );
 }
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
